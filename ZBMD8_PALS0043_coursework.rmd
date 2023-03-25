@@ -1,0 +1,427 @@
+---
+title: "PALS0043 Course Work, Candidate ZBMD8"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="")
+library(lme4)
+library(lmerTest)
+library(tidyverse)
+library(broom.mixed)
+library(truncnorm)
+library(knitr)
+library(kableExtra)
+library(sjPlot)
+```
+
+## 1. Journal article
+
+The paper that I will base my experiment on is: Suppes, A., Tzeng, C. Y., & Galguera, L. (2015). Using and seeing co-speech gesture in a spatial task. Journal of Nonverbal Behavior, 39(3), 241-257.
+
+I confirm this is a peer reviewed article about a psychology topic.
+
+I confirm I have attached an annotated pdf to this submission.
+
+## 2. Background information
+
+We often produce gestures or hand movements when we speak. However, there has been a debate of how gestures aid communication. It remains unclear if gestures facilitate speech production or comprehension, or both. Therefore, this study examined the utility of co-speech hand gestures on speech production, and its influence on listeners' comprehension ability and accuracy. 
+
+This study consisted of 2 experiments. In experiment 1, participants studied a mix of simple and complex apartment layouts one-by-one, and described the layout from memory. The types of co-speech gestures produced were coded and measured. They found that frequency of combined iconic-deictic gestures** increased as a function of the layout complexity. This was because more complex layouts either consisted of visuo-spatial information that were difficult to verbalise, or difficult to memorise. This led onto experiment 2, which was our focus of the simulation. 
+
+Experiment 2 looked at (1) how iconic-deictic gestures facilitated listener comprehension and (2) to what extent did it matter if listeners saw the gestures through the video.Participants either listened (audio-only) or listened and watched (audio+video) the apartment layout descriptions. Descriptions were produced by 15 speakers, 3 descriptions each. In total, participants listened to 45 layout descriptions that varied in complexity (simple or complex), drew the layouts, and their accuracies were measured. 
+
+**Iconic gestures resemble the gestures’ referents in form, while deictic gestures indicate location or path. 
+
+## 3. Research Question / Hypotheses
+
+**The question I have chosen to simulate is**: To what extent do iconic-deictic gestures facilitate listener comprehension, and to what extent does it matter if listeners see the gestures that accompany the spoken message?
+
+**Simplifications I made to this question are**: The model presented in Table 5 from the paper contains word count, number of other gestures, and iconic-deictic gestures x listeners' condition interaction, which are all non-significant. I omitted these 3 terms from the model for simplicity. 
+
+**Hypotheses relating to this question are**: 
+H1: Higher frequency of iconic-deictic gestures will lower accuracy in drawing the apartment layouts.
+H2: Listeners' condition (audio-video or audio-only) will not impact accuracy in drawing the apartment layouts. 
+
+## 4. Variables
+
+### The dependent variable
+
+**Name**: Listeners' drawing accuracy (Accuracy)
+
+**Type**: Continuous
+
+**Values it can take**: 0-100 (%)
+
+**Descriptive statistics**: From table 2: simple layout (M = 77.86, SD = 19.23); complex layout (M = 67.85, SD = 20.30).
+
+### The independent variable (1)
+
+**Name**: Apartment layout complexity (Complexity)
+
+**Type**: Binary
+
+**Values it can take**: Simple (coded as 0); Complex (coded as 1). Deviation coding was taken from Table 5 notes. 
+
+**Descriptive statistics**: This is a within-subject factor. The exact number of complex and simple apartment layouts was not mentioned in the paper. Therefore, I used sample() to randomly allocate simple or complex to the 45 apartment descriptions. In this particular simulation, there were 24 simple and 21 complex layouts per participant block. Complexity was consistent across different participants as they completed the same trials. For example, speaker 1's description 1 was complex across all 158 participants. This was done instead of sample() for 7110 trials to better resemble the paper.
+
+### The independent variable (2)
+
+**Name**: Listeners' condition (Condition)
+
+**Type**: Binary
+
+**Values it can take**: Audio+video (coded as -0.5); Audio-only (coded as 0.5). Deviation coding was taken from Table 5 notes. 
+
+**Descriptive statistics**: This is a between-subject factor. For simplicity, we allocated the first 72 participants (ID = 1:72) to audio+video, and the remaining 86 to audio-only condition. 
+
+### The independent variable (3)
+
+**Name**: Number of iconic-deictic gestures (Gesture)
+
+**Type**: Continuous (interval)
+
+**Values it can take**: 0-infinity. Maximum was not specified in the paper. After centering, there is no limit to values it can take.
+
+**Descriptive statistics**: From table 2: simple layout (M = 1.80, SD = 2.40); complex layout (M = 4.26, SD = 3.60). From table 5 notes, it was mean-centred and we applied that in our simulation by using scale().
+
+### Random effects
+
+**Structure**: The original model included a random intercept for participant. This assumes that participant vary in their ability to accurately comprehend and recreate apartment layouts. The model also contained a random intercept for speakers (crossed effect). Each participant completed 45 trials, which was comprised 3 apartment layout descriptions per speaker (n=15). This suggests that speakers vary in how good they produced the descriptions. We included both random intercepts in our simulation model.
+
+**Descriptive statistics**: We estimated the values through trial and error. We assumed random effects for participants and speakers to be 13 and 1.7 respectively,  and residual variance to be 12. The proportion was based on the fact that the original paper stated heterogeneity between participants but not speakers. 
+
+## 5. Study Design
+
+**Study design**: This is an experimental study. Condition is a between-subject factor. 158 participants were randomly allocated to the audio+video (n=72) or audio-only condition (n=86). Complexity is a within-subject factor. All participants, regardless of condition, completed the same 45 trials that varied in complexity (24 simple and 21 complex trials). Similarly, gesture is a within-subject factor that varied based on complexity, but was consistent across participants. 
+
+**Model formula**: lmer(accuracy ~ complexity + condition + gesture + (1|participant) + (1|speakers))
+
+## 6. Simulation code for 1 dataset
+
+```{r}
+set.seed(56789)
+#Set-up
+n <- 158
+nspeakers <- 15 #number of speakers that produced the layout descriptions (3 per speaker)
+ntrials <- 45 #number of apartment layout descriptions 
+
+#Fixed effects from Table 5
+b0 <- 76.03 #intercept
+b1 <- -8.55 #effect of complexity
+b2 <- -2.20 #effect of condition 
+b3 <- -0.78 #effect of gesture
+
+#Estimated random effect 
+tau_0 <- 13 #participants 
+omega_0 <- 1.7 #speakers 
+sigma <- 12 #error 
+
+participants <- tibble(id = 1:n,
+                       T_0i = rnorm(n,0,tau_0), #random effect
+                       condition = if_else(id<=72,"av","audio")) #condition allocation (av for audio+video, audio for audio-only)
+
+stimuli <- tibble(speakers = 1:nspeakers,
+                  O_0i = rnorm(nspeakers,0,omega_0)) #random effect
+
+#Dataset for iconic-deictic gestures
+trials <- tibble(speakers = rep(1:nspeakers, each=3),
+                 desc = rep(1:3, times=15), #each speakers produced 3 descriptions
+                 complexity = sample(c('simple','complex'),ntrials,replace=T)) #random sampling to decide the number of simple and complex trials
+
+simple <- tibble(complexity = 'simple',
+                 gesture = rtruncnorm((trials %>% filter(complexity == 'simple') %>% count() %>% pull(n)),0,Inf,1.80,2.40))
+
+complex <- tibble(complexity = 'complex',
+                  gesture = rtruncnorm((trials %>% filter(complexity == 'complex') %>% count() %>% pull(n)),0,Inf,4.26,3.60))
+
+gesture <- rbind(simple,complex) 
+
+gesture <- gesture[sample(1:nrow(gesture)),] #randomise order of simple and complex trials
+
+trials <- trials %>%
+  select(-complexity) 
+
+trials <- cbind(trials,gesture) 
+
+#Simulate data
+simdat <- tibble(id = rep(1:n,each=45),
+                 speakers = rep(1:nspeakers,times=3*n),
+                 desc = rep(1:3, times=n*nspeakers)) %>%
+  inner_join(participants, by = 'id') %>%
+  inner_join(stimuli, by = 'speakers') %>%
+  inner_join(trials, by = c('speakers','desc')) %>%
+  mutate(complexity_dev = if_else(complexity == 'simple',-0.5,0.5),
+         condition_dev = if_else(condition == 'av',0,1)) %>% #deviation coding from table 5 notes
+  mutate(gesture_centred = scale(gesture)) #mean centered and scaled 
+
+#Build dependent variable (accuracy)
+simdat <- simdat %>%
+  mutate(sigma = rnorm(nrow(simdat),0,sigma),
+         accuracy = b0 + b1*complexity_dev + b2*condition_dev + b3*gesture_centred + T_0i + O_0i + sigma) %>% 
+  mutate(accuracy  = if_else(accuracy >100, 100, accuracy)) #change values that exceed 100 to 100 (maximum value)
+
+mod1 <- lmer(accuracy ~ complexity_dev + condition_dev + gesture_centred + (1|id) + (1|speakers), dat=simdat) 
+tab_model(mod1,
+          dv.labels = 'Simulation Model',
+          show.se = T,
+          show.ci=F,
+          show.stat=T,
+          order.terms = c(1,2,3,4),
+          string.pred = 'Variables',
+          string.est = 'Estimates',
+          string.se = 'SE',
+          string.stat  = 't',
+          digits.p =3,
+          p.style = 'numeric')
+```
+
+## 7. Code to check simulation has worked
+
+### Descriptives
+```{r}
+#Number of trials per participant
+simdat %>% count(id) %>% pull(n) 
+```
+Each participant completed 45 trials. 
+
+```{r}
+#Group allocation
+simdat %>% group_by(condition) %>% count() 
+```
+3870 audio-only trials/45 trials per participant = 86 participants. 3240 audio+video trials/45 trials per participant = 72 participants. 
+
+```{r}
+#Layout complexity
+simdat %>% filter(id == '1') %>% count(complexity)
+```
+24 simple and 21 complex trials as determined by sample() earlier on.
+
+```{r}
+#Means and SDs
+simdat %>% group_by(complexity) %>% summarise(m_ges = mean(gesture), sd_ges = sd(gesture), m_acc = mean(accuracy), sd_acc = sd(accuracy))
+```
+We achieved the same pattern where simple layouts had on average fewer gestures than complex layouts. Means and SDs for gestures deviated from the original data, where simple layouts had M = 1.8 and SD = 2.4, and complex layout had M = 4.26 and SD = 3.6. We suspect this is because firstly, the number of complex and simple layouts used in the experiment was not specified in the paper. We randomly sampled and decided on the split.However, this may not reflect the actual layout distribution. Different sample size would have influenced the SD even if the mean remained the same. Secondly, rnorm() estimated negative values for number of gestures, but the value cannot be under 0. Hence we truncated the number of gestures when we simulated the dataset. This would have changed the dataset and deviated the means for gestures.
+
+### Model outputs
+```{r}
+mod1 <- lmer(accuracy ~ complexity_dev + condition_dev + gesture_centred + (1|id) + (1|speakers), dat=simdat) 
+tab_model(mod1,
+          dv.labels = 'Simulation Model',
+          show.se = T,
+          show.ci=F,
+          show.stat=T,
+          order.terms = c(1,2,3,4),
+          string.pred = 'Variables',
+          string.est = 'Estimates',
+          string.se = 'SE',
+          string.stat  = 't Value',
+          digits.p =2,
+          p.style = 'numeric')
+```
+
+## 8. Simulation code for power analysis
+
+**Any differences to original experiment**: Removed word count, number of other gestures, and iconic-deictic gestures x listeners' condition term.
+
+**Alpha level**: .05
+
+**Effect of interest**: Complexity
+
+```{r}
+#Create function
+analyse <- function() {
+#Set-up
+n <- 158
+nspeakers <- 15 #number of speakers that produced the layout descriptions (3 per speaker)
+ntrials <- 45 #number of apartment layout descriptions 
+
+#Fixed effects from Table 5
+b0 <- 76.03 #intercept
+b1 <- -8.55 #effect of complexity
+b2 <- -2.20 #effect of condition 
+b3 <- -0.78 #effect of gesture
+
+#Estimated random effect 
+tau_0 <- 13 #participants 
+omega_0 <- 1.7 #speakers 
+sigma <- 12 #error
+
+participants <- tibble(id = 1:n,
+                       T_0i = rnorm(n,0,tau_0), #random effect
+                       condition = if_else(id<=72,"av","audio")) #condition allocation 
+
+stimuli <- tibble(speakers = 1:nspeakers,
+                  O_0i = rnorm(nspeakers,0,omega_0)) #random effect
+
+#Dataset for iconic-deictic gestures
+trials <- tibble(speakers = rep(1:nspeakers, each=3),
+                 desc = rep(1:3, times=15), #3 descriptions per speaker
+                 complexity = sample(c('simple','complex'),ntrials,replace=T)) #random sampling to decide the number of simple and complex trials
+
+simple <- tibble(complexity = 'simple',
+                 gesture = rtruncnorm((trials %>% filter(complexity == 'simple') %>% count() %>% pull(n)),0,Inf,1.80,2.40))
+
+complex <- tibble(complexity = 'complex',
+                  gesture = rtruncnorm((trials %>% filter(complexity == 'complex') %>% count() %>% pull(n)),0,Inf,4.26,3.60))
+
+gesture <- rbind(simple,complex) 
+
+gesture <- gesture[sample(1:nrow(gesture)),] #randomise order of simple and complex trials
+
+trials <- trials %>%
+  select(-complexity) 
+
+trials <- cbind(trials,gesture) 
+
+#Simulate data
+simdat <- tibble(id = rep(1:n,each=45),
+                 speakers = rep(1:nspeakers,times=3*n),
+                 desc = rep(1:3, times=n*nspeakers)) %>%
+  inner_join(participants, by = 'id') %>%
+  inner_join(stimuli, by = 'speakers') %>%
+  inner_join(trials, by = c('speakers','desc')) %>%
+  mutate(complexity_dev = if_else(complexity == 'simple',-0.5,0.5),
+         condition_dev = if_else(condition == 'av',0,1)) %>% #deviation coding from table 5 notes
+  mutate(gesture_centred = scale(gesture)) #mean centered and scaled 
+
+#Build dependent variable (accuracy)
+simdat <- simdat %>%
+  mutate(sigma = rnorm(nrow(simdat),0,sigma),
+         accuracy = b0 + b1*complexity_dev + b2*condition_dev + b3*gesture_centred + T_0i + O_0i + sigma) %>% 
+  mutate(accuracy  = if_else(accuracy >100, 100, accuracy)) #change values that exceed 100 to 100 (maximum value) 
+  
+#Model output
+mod1 <- lmer(accuracy ~ complexity_dev + condition_dev + gesture_centred + (1|id) + (1|speakers), dat=simdat) %>%
+  tidy(effects='fixed')
+} 
+```
+
+```{r, warning=FALSE}
+#Simulate 100 data sets
+sim100 <- map_df(1:100, ~analyse()) 
+
+sim100 <- sim100 %>%
+  filter(term == 'complexity_dev') %>%
+  mutate(sig = if_else(p.value<.05, TRUE, FALSE))
+```
+
+```{r}
+#Calculate % of true significance
+sim100 %>% pull(sig) %>%  mean()
+```
+
+Using this simulated dataset, the power to detect a significant effect of .05 was 100 %
+
+## 9. Sensitivity analysis
+
+**Description of parameter(s) that were changed for this part**: I ran a power calculation for a range of n (80,180,280 participants), each for an effect of complexity of -10, -5, 0. Results are displayed in Table 1.
+
+```{r}
+#Create function
+analyse_n_b1 <- function(n, b1) {
+#Set-up
+n <- n
+nspeakers <- 15 #number of speakers that produced the layout descriptions (3 per speaker)
+ntrials <- 45 #number of apartment layout descriptions 
+
+#Fixed effects from Table 5
+b0 <- 76.03 #intercept
+b1 <- -b1 #effect of complexity
+b2 <- -2.20 #effect of condition 
+b3 <- -0.78 #effect of gesture
+
+#Estimated random effect 
+tau_0 <- 13 #participants 
+omega_0 <- 1.7 #speakers 
+sigma <- 12 #error
+
+participants <- tibble(id = 1:n,
+                       T_0i = rnorm(n,0,tau_0), #random effect
+                       condition = if_else(id<=72,"av","audio")) #condition allocation (av for audio+video)
+
+stimuli <- tibble(speakers = 1:nspeakers,
+                  O_0i = rnorm(nspeakers,0,omega_0)) #random effect
+
+#Dataset for iconic-deictic gestures
+trials <- tibble(speakers = rep(1:nspeakers, each=3),
+                 desc = rep(1:3, times=15), #3 descriptions per speaker
+                 complexity = sample(c('simple','complex'),ntrials,replace=T)) #random sampling to decide the number of simple and complex trials
+
+simple <- tibble(complexity = 'simple',
+                 gesture = rtruncnorm((trials %>% filter(complexity == 'simple') %>% count() %>% pull(n)),0,Inf,1.80,2.40))
+
+complex <- tibble(complexity = 'complex',
+                  gesture = rtruncnorm((trials %>% filter(complexity == 'complex') %>% count() %>% pull(n)),0,Inf,4.26,3.60))
+
+gesture <- rbind(simple,complex) 
+
+gesture <- gesture[sample(1:nrow(gesture)),] #randomise order of simple and complex trials
+
+trials <- trials %>%
+  select(-complexity) 
+
+trials <- cbind(trials,gesture) 
+
+#Simulate data
+simdat <- tibble(id = rep(1:n,each=45),
+                 speakers = rep(1:nspeakers,times=3*n),
+                 desc = rep(1:3, times=n*nspeakers)) %>%
+  inner_join(participants, by = 'id') %>%
+  inner_join(stimuli, by = 'speakers') %>%
+  inner_join(trials, by = c('speakers','desc')) %>%
+  mutate(complexity_dev = if_else(complexity == 'simple',-0.5,0.5),
+         condition_dev = if_else(condition == 'av',0,1)) %>% #deviation coding from table 5 notes
+  mutate(gesture_centred = scale(gesture)) #mean centered and scaled 
+
+#Build dependent variable (accuracy)
+simdat <- simdat %>%
+  mutate(sigma = rnorm(nrow(simdat),0,sigma),
+         accuracy = b0 + b1*complexity_dev + b2*condition_dev + b3*gesture_centred + T_0i + O_0i + sigma) %>% 
+  mutate(accuracy  = if_else(accuracy >100, 100, accuracy)) #change values that exceed 100 to 100 (maximum value) 
+  
+#Model output
+mod1 <- lmer(accuracy ~ complexity_dev + condition_dev + gesture_centred + (1|id) + (1|speakers), dat=simdat) %>%
+  tidy(effects='fixed')
+} 
+```
+
+```{r, eval=F}
+#Range of values to be changed
+range_n <- c(80, 180, 280)
+range_b1 <- c(-10,-5,0)
+
+sims <- crossing(n = range_n, b1 = range_b1, sim=1:100) 
+
+sims <- sims %>%
+  mutate(results = map2(n, b1, analyse_n_b1)) %>% 
+  unnest(results)
+
+power_n_b1 <- sims %>% 
+  filter(term=='complexity_dev') %>% 
+  mutate(sig = if_else(p.value<.05, TRUE, FALSE)) %>% 
+  group_by(n, b1) %>%
+  summarise(power=mean(sig))
+
+write.csv(power_n_b1, 'powerdat.csv', row.names=F) 
+```
+
+**Results of the sensitivity analysis**:
+```{r}
+power <- read.csv("powerdat.csv")
+kable(power, 
+      align = "c", 
+      caption = "Table 1: Power to detect an effect of complexity for a range of effect sizes",
+      digits = 2) %>%
+  kable_styling() 
+```
+
+## 10. Final reflections
+
+It was difficult to randomise complexity and gesture. I was not able to add a column for rnorm() to simulate gesture data after randomising the complexity in the "trials" table. This is because of the sample size, it was not 45 and therefore could not be ran. As such, I had to create separate tables and simulate the data, then combine and shuffle to create the randomness and join it with the other dataframes. This complicated the process of creating the dataset. 
+
+Also, after I simulated the number of gestures per trial, I noticed that some simulated numbers were under 0 which would not be possible. Therefore I did rtruncnorm() to limit the extreme values to be 0 and infinity. However, my manipulation check reveled that the mean and SD for both complex and simple layouts were different from the original paper because of that. This lowered the resemblance of the simulation to the original dataset and affected the model output. 
+
+Finally, I had to estimate the random effect structure. While the SE for random intercepts were provided, I converted them to SD but the magnitudes were too big and when they were used to build the dependent variable (accuracy), all values were over 100 which would not be possible. I tried researching for other functions such as confit(), plm(), or methods to convert z-value / SE to random effect SD. Also, I tried creating a simulated dataset for random intercepts directly using the estimate, SE, and z-values provided and combine them with the remaining dataset to build the accuracy DV. However, none of the above methods resulted in a simulated dataset that resembles the original data. As such, I decided to estimate through trial and error instead. 
+
+Overall I really enjoy doing this coursework because it enhanced my knowledge for linear mixed models and simulations. It also pushed me to google functions or solutions beyond the course content to resolve problems. 
