@@ -1,0 +1,164 @@
+---
+title: "RVZN3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggpubr)
+library(car)
+library(ez)
+library(knitr)
+library(kableExtra)
+```
+
+
+# Project title: the relationship between contact hours with supervisors, student-supervisor relationship, and PhD experience satisfaction
+
+## Introduction
+
+We are interested in what determines students satisfaction, which promotes student retention rate and academic achievement (Al–Sheeb et al., 2018; Dhaqane & Afrah, 2016). In particular, our research question is how student-supervisor relationship satisfaction and the number of one-on-one contact hours with one’s supervisor influences one’s PhD experience satisfaction.
+
+Supervisor supportiveness is the greatest predictor of PhD student satisfaction (Dericks et al., 2019), and we believe that this stems from the number of one-on-one contact hours one has with their supervisor. Moreover, student-supervisor relationship contributes to one’s sense of belonging (David et al., 2001), which strongly correlates with one’s university experience (Thomas & Galambos, 2004). 
+
+Therefore, we hypothesized that: 
+
+(1) Students who are more satisfied with their student-supervisor relationship will be more satisfied with their PhD experience. We refined the hypothesis from “good relationship" to “more satisfied with their student-supervisor relationship" since this better reflects what was asked in the survey. 
+
+(2) Students with more one-on-one contact hours with supervisors will be more satisfied with their PhD experience.
+
+(3) The difference between student-supervisor relationship satisfaction depends on the levels of one-on-one contact time with supervisors. We refined the use of words from “strength” to “satisfaction” of relationship.
+
+
+## Methods
+### Data manipulation
+First, we removed observations with missing values (n/a) in any of the variables. Secondly, we interpreted student-supervisor relationship satisfaction as interval data instead of transforming to categorical (planned manipulation: “1-3” = “poor”, “4” = “neutral”, “5-7” = good). This is because grouping likert scale removes useful data points and may lead to a less valid conclusion. For example, grouping relationship satisfaction of 1 and 3 together as “poor” may eliminate useful data that explains the pattern between the two scores in PhD satisfaction. This is also a more commonly adapted practice in similar studies (e.g., Al-Sheeb et al., 2018; Le et al., 2021). Thirdly, we removed participants who responded “Other, please specify” in the “one-on-one contact time with supervisor each week” question (Q22). Since additional information on the number of contact hours these participants had were not available in the final data set, we could not group their responses to the other 3 groups as planned.
+  
+
+### Design
+Our independent variables were the number of one-on-one contact hours students had with their supervisors per week (with three levels: less than one hour, one to three hours, more than three hours) and their student-supervisor relationship satisfaction score (likert scale from 1-7). Our dependent variable was participants’ PhD experience satisfaction score (likert from 1 to 7).
+
+Importantly, we treated a single likert-type question (PhD experience satisfaction; student-supervisor relationship satisfaction) as interval data. Meanwhile, prior studies (e.g. Al-Sheeb et al., 2018) grouped multiple likert-type questions and used the total/ mean derived. This is the recommended practice especially while measuring less concrete concepts (e.g., satisfaction) to better capture the assessed concept (Sullivan & Artino, 2013). It should be acknowledged that grouping multiple likert-type questions may have brought us a more valid result. However, we could not group likert-type questions post-hoc due to the limitation of data set (IV and DV will be derived from the same set of questions which will confound the results). 
+
+
+```{r, echo=F}
+#Data manipulation
+dat <- read.csv("phd_data_final3.csv") %>%
+  filter(Q22!="Other, please specify") %>% #remove "Other, please specify" since additional data is not available
+  filter(!is.na(Q17)) %>% filter(!is.na(Q19.f))  %>%  filter(!is.na(Q22)) #remove n/a data points 
+```
+
+```{r, echo=F}
+#Recode 
+dat2 <- dat %>% 
+  select(Q17,Q19.f,Q22) %>% #select relevant columns
+  mutate(Relationship=Q19.f) %>% #rename column
+  mutate(Satisfaction=dplyr::recode(Q17,
+                                    "1 = Not at all satisfied"="1", 
+                                    "4 = Neither satisfied nor dissatisfied" = "4", 
+                                    "7 = Extremely satisfied"="7")) %>%
+  mutate(Contact.hours=dplyr::recode(Q22,
+                                     "Less than an hour" = "1.Less than an hour",
+                                     "Between one and three hours" = "2.Between one and three hours",
+                                     "More than three hours"="3.More than three hours")) %>% #recode with numbers so they present in a logical order in graphs, from the least amount of hours to the greatest (different order if following alphabetical order) 
+  select(Relationship, Contact.hours,Satisfaction) %>% #select relevant columns
+  mutate(Satisfaction=as.numeric(Satisfaction),Contact.hours=as.factor(Contact.hours),Relationship=as.numeric(Relationship))
+```
+
+### Participants
+We recruited 6811 participants, of which 359 participants’ data were eliminated due to incomplete responses/responded “Other, please specify” in Q22, leaving 6452 participants in the final analysis. Median age group was 25-34 (see Table 1 for age group distribution). Table 2 illustrates the gender distribution.
+
+```{r, echo=F}
+age <- dat %>% select(Q52) %>% mutate (Age=Q52) %>% group_by(Age) %>% count() #count number of observations per age group
+kable(age,caption="Table1: Age distribution") %>% kable_styling() #present results in a table 
+```
+
+```{r, echo=F}
+gender <- dat %>% select(Q53) %>% mutate (Gender=Q53) %>% group_by(Gender) %>% count() #count number of observations in each gender category
+kable(gender,caption="Table2: Gender Distribution") %>% kable_styling() #present results in a table 
+```
+
+
+## Results
+Table 3 shows that mean PhD experience satisfaction increases with contact hours. 
+
+```{r, echo=F}
+#summary of student-supervisor relationship satisfaction and PhD experience satisfaction score, grouped by the number of contact hours
+desc_summary <- dat2 %>% 
+  group_by(Contact.hours) %>% 
+  summarise(m_rel=mean(Relationship),sd_rel=sd(Relationship),m_sat=mean(Satisfaction),sd_sat=sd(Satisfaction)) #calculate mean and sd according to contact hour groups
+
+kable(desc_summary,caption="Table3: Student-supervisor relationship satisfaction and PhD experience satisfaciton by the number of contact hours",digits = 2) %>% kable_styling() ##present results in a table
+```
+
+### ANCOVA assumption testing
+Since we decided to treat the student-supervisor relationship satisfaction score as interval rather than categorical, we had one categorical and one numerical predictor. As such, an ANCOVA was used instead of a two-way ANOVA (original plan).
+
+The Q-Q plot (figure 1) showed not all data points lied along/close to the straight lie, therefore did not meet the assumption of normally distributed residuals .
+
+```{r, echo=F, results='hide',fig.keep='all'}
+#Create a Q-Q plot to examine whether residuals are normally distributed 
+resid <- resid(aov(Satisfaction ~ Contact.hours + Relationship, data = dat2)) #create residual object 
+qqPlot(resid, main="Figure1: Q-Q Plot examining normal distribution for residials") 
+```
+
+Figure 2 shows a linear relationship between “Relationship” and “Satisfaction” for each contact hour group, therefore the assumption was met.
+
+```{r, echo=F, message=F, warning=F}
+#Create a scater plot to examine the linearity between student-supervisor relationship satisfaction and PhD experience satisfaction in each contact hour group.
+ggscatter(dat2,x = "Relationship", y = "Satisfaction",color = "Contact.hours", add = "reg.line") + labs(x="Student-supervisor relationship satisfaction", y="PhD experience satisfaction",title="Figure2: Linearity between student-supervisor relationship satisfaction \n and PhD experience satisfaction in each contact hour group") 
+```
+
+```{r, echo=F, message=F}
+#Use a Levene's Test to check whether the variance of residuals is equal for all groups
+levene <- leveneTest(resid~dat2$Contact.hours)
+```
+The assumption of equal variance of residuals for all groups was not met, as indicated by a significant Levene's Test, F = 27.87, df = 2, p < .001.
+
+It should be noted that the some assumptions of using ANCOVA were not met. However, studies suggested that parametric tests (such as ANCOVA) are robust even when assumptions are violated, such as an extreme deviation from normality (Norman, 2010), particularly with large sample sizes. Results of sample sizes greater than 5 were robust even with non-normal distributions. As such, with a large sample size (n = 6452), we believe that ANCOVA can still provide robust and valid results.
+
+
+### ANCOVA
+```{r, echo=F, message=FALSE, results='hide'}
+#Running ANCOVA
+mod <- lm(Satisfaction ~ Relationship*Contact.hours, data=dat2) #model interaction effect between the two predictors (Relationship and Contact hours)
+summary(mod)
+```
+ANCOVA was used to examine the effect of student-supervisor relationship satisfaction and one-on-one contact hours on PhD experience satisfaction. The ANCOVA model explained a significant amount of variation in PhD experience satisfaction, F(5,6446) = 689.8, p < .001, adjusted R2 = 0.35.
+
+Our results supported the hypothesis that students who are more satisfied with their relationship with supervisors will be more satisfied with their PhD experience (hypothesis 1), as indicated by a main effect of student-supervisor relationship satisfaction (F = 3415.51, df = 1, p < .001) on PhD experience satisfaction, and the positive slope in Figure 3. PhD experience satisfaction increases with relationship satisfaction, b = 0.46, p < .001. Similarly, main effect of one-on-one contact hours with supervisors (F = 14.94, df = 2, p <.001) shows that students with more one-on-one contact hours with supervisors will be more satisfied with their PhD experience (hypothesis 2). However, when controlling for student-supervisor relationship satisfaction, the difference in PhD experience satisfaction between the contact hour groups was not significant. PhD experience satisfactions of students with between one and three hours contact hour per week were higher than those had less than one hour, b = 0.20, p = .05. On the other hand, PhD experience satisfactions of students with more than three hours per week were lower than those had between one and three hours, b = -0.02, p = .90.
+
+
+```{r, echo=F, results='hide'}
+#Determine whether the main effects (Relationship, Contact hours) and the interaction between the two is significant 
+anova(mod)
+```
+
+Additionally, the interaction between student-supervisor relationship satisfaction and one-on-one contact hours with supervisors was not significant, F = 1.86, df = 2, p = 0.15. The hypothesis of “difference between student-supervisor relationship satisfaction depends on the levels of one-on-one contact time with supervisors” was not supported (hypothesis 3). As such, this implies that PhD experience satisfaction will depend on a similar manner of student-supervisor relationship satisfaction in all three contact hour groups (refer to figure 3).
+
+```{r, echo=F, message=F, warning=F}
+#Visualisation: scatter plot with line for each contact-hour group
+ggplot(dat2,aes(x=Relationship,y=Satisfaction,group=Contact.hours)) +
+  geom_point(aes(colour=Contact.hours)) +
+  geom_smooth(method=lm,aes(colour=Contact.hours)) + 
+  labs (x="Student-supervisor relationship satisfaction", y="PhD experience satisfaction", title="Figure3: Relationship between student-supervisor relationship satisfaction, \n number of one-to-one contact hour with supervisors, \n and PhD experience satisfaction in each contact hour group") 
+```
+
+## Reference
+Al-Sheeb, B., Hamouda, A. M., & Abdella, G. M. (2018). Investigating determinants of student satisfaction in the first year of college in a public university in the state of Qatar. Education Research International, 2018. https://doi.org/10.1155/2018/7194106 
+
+David Kember, Kenneth Lee & Natalia Li (2001) Cultivating a sense of belonging in part-time students, International Journal of Lifelong Education, 20:4, 326-341, DOI: 10.1080/02601370117754
+
+Dericks, G., Thompson, E., Roberts, M., & Phua, F. (2019). Determinants of PhD student satisfaction: the roles of supervisor, department, and peer qualities. Assessment & evaluation in higher education. https://doi.org/10.1080/02602938.2019.1570484
+
+Dhaqane, M. K., & Afrah, N. A. (2016). Satisfaction of Students and Academic Performance in Benadir University. Journal of Education and Practice, 7(24), 59-63.
+
+Le, M., Pham, L., Kim, K., & Bui, N. (2021). The impacts of supervisor–PhD student relationships on PhD students’ satisfaction: A case study of Vietnamese universities. Journal of University Teaching & Learning Practice, 18(4), 18.
+
+Norman, G. (2010). Likert scales, levels of measurement and the “laws” of statistics. Advances in health sciences education, 15(5), 625-632. https://doi.org/10.1007/s10459-010-9222-y
+
+Sullivan, G. M., & Artino, A. R., Jr (2013). Analyzing and interpreting data from likert-type scales. Journal of graduate medical education, 5(4), 541–542. https://doi.org/10.4300/JGME-5-4-18
+
+Thomas, E. H., & Galambos, N. (2004). What satisfies students? Mining student-opinion data with regression and decision tree analysis. Research in Higher Education, 45(3), 251-269. https://doi.org/10.1023/B:RIHE.0000019589.79439.6e
+
